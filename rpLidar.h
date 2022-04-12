@@ -104,6 +104,7 @@ class rpLidar{
 	stScanDataPoint_t DataBuffer[1500];	///<Storage to save the Data of a Standard Scan
 	int scanPoints[360];//360 points containing latest scan distances as value
   int quality[360];
+  int scanCount;
 	private:
 	
 	stExpressDataPacket_t ExpressDataBuffer[79];	///<Storge to save the Data of an Express Scan

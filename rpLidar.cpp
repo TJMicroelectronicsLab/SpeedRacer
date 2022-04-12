@@ -14,7 +14,8 @@ rpLidar::rpLidar(HardwareSerial *_mySerial,uint32_t baud, int rx, int tx)
   serial= new HardwareSerial(2);
   serial->setRxBufferSize(3080);
   serial->begin(baud,SERIAL_8N1,rx,tx);
-  dataIndex = 0;
+  scanCount = 0;
+
 }
 
 
@@ -163,6 +164,7 @@ uint16_t rpLidar::awaitStandardScan()
 			{
 				if(point.angle_high&0x01)
 				{
+          scanCount++;
 					return count;
 				}
 			}
