@@ -146,7 +146,7 @@ uint16_t rpLidar::awaitStandardScan()
 
 	uint32_t startTime=millis();
   int lastAngle=0;
-	while(millis()<(startTime+1400)) //timeout after 5 seconds
+	while(millis()<(startTime+150)) //timeout after 5 seconds
 	{
 		if(serial->available()>=5)
 		{
