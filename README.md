@@ -9,6 +9,6 @@ or any other similar resource. This will allow you to select the correct board, 
 
 "DOIT ESP32 DEVKIT V1"
 
-In addition, the ESP32Servo library should also be installed via the library manager.
+In addition, the ServoESP32 library should also be installed via the library manager.
 
 The code should compile after this.
