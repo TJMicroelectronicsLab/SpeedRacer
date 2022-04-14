@@ -145,6 +145,7 @@ uint16_t rpLidar::awaitStandardScan()
 	bool frameStart=false;
 
 	uint32_t startTime=millis();
+  int lastAngle=0;
 	while(millis()<(startTime+1400)) //timeout after 5 seconds
 	{
 		if(serial->available()>=5)
@@ -175,8 +176,13 @@ uint16_t rpLidar::awaitStandardScan()
           
           int angle = calcIntAngle(point.angle_low,point.angle_high);
           if(angle < 360) {
+            //if we are scanning quickly we may 
+            if(angle > lastAngle + 1){
+              for(int i = lastAngle;i<angle;i++) scanPoints[angle] = 0;
+            }
             scanPoints[angle] = distance;
             quality[angle]= point.quality;
+            lastAngle  = angle;
           }
         }
 			}

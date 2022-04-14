@@ -63,7 +63,7 @@ struct run{
 } ;
 void loop()
 {
-//lidar.scanPoints[] contains 360 values of distances. 
+//lidar.scanPoints[] contains 360 values of distances. Zero values should be ignored, they are invalid.
 //scanCount is incremented every time a complete scan if finished.
 //no thread synchronization is necessary if you don't write to these values
 //control that car
