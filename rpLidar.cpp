@@ -146,7 +146,7 @@ uint16_t rpLidar::awaitStandardScan()
 
 	uint32_t startTime=millis();
   int lastAngle=0;
-	while(millis()<(startTime+175)) //timeout after 5 seconds
+	while(millis()<(startTime+1400)) //timeout after 5 seconds
 	{
 		if(serial->available()>=5)
 		{
@@ -158,7 +158,6 @@ uint16_t rpLidar::awaitStandardScan()
 			{
 				if(point.angle_high&0x01) //check Bit
 				{
-          scanCount++;
 					frameStart=true;
 				}
 			}
@@ -166,7 +165,8 @@ uint16_t rpLidar::awaitStandardScan()
 			{
 				if(point.angle_high&0x01)
 				{
-          return count;
+          scanCount++;
+					return count;
 				}
 			}
 			else if(frameStart)
@@ -188,7 +188,7 @@ uint16_t rpLidar::awaitStandardScan()
 			}
 		}
 	}
-  return count;
+	return count;
 }
 
 uint16_t rpLidar::awaitExpressScan()
