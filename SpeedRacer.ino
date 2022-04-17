@@ -65,9 +65,16 @@ void setup() {
 
 void loop()
 {
+<<<<<<< HEAD
   //xSemaphoreGive(mutex);
  // xSemaphoreTake(mutex, portMAX_DELAY);
   //lidar.readMeasurePoints();// reads a full scan and save it to Data
  lidar.DebugPrintMeasurePoints(lidar._cached_scan_node_hq_count);
  delay(1);
+=======
+//lidar.scanPoints[] contains 360 values of distances. Zero values should be ignored, they are invalid.
+//scanCount is incremented every time a complete scan if finished.
+//no thread synchronization is necessary if you don't write to these values
+//control that car
+>>>>>>> c7574a5ce57db34815511a470b8a9e8f540a57fc
 }
