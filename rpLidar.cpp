@@ -43,12 +43,12 @@ static sl_u32 _varbitscale_decode(sl_u32 scaled, sl_u32 & scaleLevel)
     }
     return 0;
 }
-rpLidar::rpLidar(HardwareSerial *_mySerial,uint32_t baud)
+rpLidar::rpLidar(HardwareSerial *_mySerial,uint32_t baud,int rx,int tx)
 {
    scan_mutex = xSemaphoreCreateMutex();
 	serial=_mySerial;
   serial->setRxBufferSize(256);
-	serial->begin(baud, SERIAL_8N1,13,12);
+	serial->begin(baud, SERIAL_8N1,rx,tx);
 }
 
 

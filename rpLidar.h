@@ -20,7 +20,7 @@ class rpLidar{
 	 * @param pointer to used USART
 	 * @param Baudrate
 	 */
-	rpLidar(HardwareSerial *_serial,uint32_t baud);
+	rpLidar(HardwareSerial *_serial,uint32_t baud, int rx, int tx);
 
 	/**
 	 * Gets the device info from rpLidar
