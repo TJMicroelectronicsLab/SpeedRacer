@@ -22,7 +22,7 @@ void setup() {
     return;
   } //start the express scan of the lidar\  esp_task_wdt_init(36000, false); //turn off watchdog so core 0 task doesn't cause reset
 
-  xTaskCreatePinnedToCore(readPoints, "Task_TFT", 65536, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(readPoints, "LidarPolling", 65536, NULL, 2, NULL, 0);
 
 }
 
