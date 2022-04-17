@@ -8,31 +8,15 @@
 rpLidar lidar(&Serial2,115200,13,12);
 int start_time;
 Servo steering,speed;
+
 static void readPoints(void * parameter){
   while(true){
-    lidar.readMeasurePoints();
+    int result = lidar.cacheUltraCapsuledScanData();
+	if(result!=0)
+		Serial.println(result,HEX);
   }
 }
-void printPoints(int start,int stop){
-  for (int i=0;i<70;i++){
-    Serial.print("A");
-    Serial.print(  i   );
-    Serial.print(":");
-    Serial.print( lidar.scanPoints[i]);
-    Serial.print(":");
-    Serial.print(lidar.quality[i]);
-    Serial.println();
-  }
-    for (int i=290;i<360;i++){
-    Serial.print("A");
-    Serial.print(  i   );
-    Serial.print(":");
-    Serial.print( lidar.scanPoints[i]);
-    Serial.print(":");
-    Serial.print(lidar.quality[i]);
-    Serial.println();
-  }
-}
+
 void setup() {
   esp_task_wdt_init(30, false); //turn off watchdog so core 0 task doesn't cause reset
   //attach speed servo control to port
@@ -56,15 +40,34 @@ void setup() {
   xTaskCreatePinnedToCore(readPoints, "Task_TFT", 4096, NULL, 2, NULL, 0);
     //speed.writeMicroseconds(1550);
 }
-struct run{
-    int startAngle;
-    int endAngle;
-    int count;
-} ;
+#include "rpLidar.h"
+#include "rpLidarTypes.h"
+#include <esp_task_wdt.h>
+
+
+rpLidar lidar(&Serial2,115200);
+
+
+void setup() {
+ 
+  Serial.begin(921600);
+  esp_task_wdt_init(36000, false); //turn off watchdog so core 0 task doesn't cause reset
+  lidar.stopDevice(); //reset the device to be sure that the status is good
+  lidar.setAngleOfInterest(5,175); //Set the field of view that is saved to Data
+  if(!lidar.start(express)){
+    Serial.println("failed to start");
+    return;
+  } //start the express scan of the lidar\  esp_task_wdt_init(36000, false); //turn off watchdog so core 0 task doesn't cause reset
+
+  xTaskCreatePinnedToCore(readPoints, "Task_TFT", 65536, NULL, 2, NULL, 0);
+
+}
+
 void loop()
 {
-//lidar.scanPoints[] contains 360 values of distances. 
-//scanCount is incremented every time a complete scan if finished.
-//no thread synchronization is necessary if you don't write to these values
-//control that car
+  //xSemaphoreGive(mutex);
+ // xSemaphoreTake(mutex, portMAX_DELAY);
+  //lidar.readMeasurePoints();// reads a full scan and save it to Data
+ lidar.DebugPrintMeasurePoints(lidar._cached_scan_node_hq_count);
+ delay(1);
 }
