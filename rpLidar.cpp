@@ -115,125 +115,6 @@ bool rpLidar::start(uint8_t _mode)
   return false;
 }
 
-<<<<<<< HEAD
-=======
-uint16_t rpLidar::readMeasurePoints()
-{
-	uint16_t count=0;
-	switch(scanMode)
-	{
-		case standard:
-			count=awaitStandardScan();
-			break;
-		case express:
-			count=awaitExpressScan();
-			break;
-	}
-	return count;
-}
-
-
-uint16_t rpLidar::awaitStandardScan()
-{
-	uint8_t *pBuff=(uint8_t*)&DataBuffer; //Pointer to Buffer
-	uint16_t count=0;
-	stScanDataPoint_t point;
-	bool frameStart=false;
-
-	uint32_t startTime=millis();
-  int lastAngle=0;
-	while(millis()<(startTime+150)) //timeout after 5 seconds
-	{
-		if(serial->available()>=5)
-		{
-			serial->readBytes((uint8_t*)&point,5);
-
-			//search for frameStart
-				// new Frame? S=1 !S=0 an checkbit information can be found in protocol datasheet
-			if((point.quality&0x01)&&(!(point.quality&0x02))&&!frameStart) //  framestart? S=1 !S=0
-			{
-				if(point.angle_high&0x01) //check Bit
-				{
-					frameStart=true;
-				}
-			}
-			else if(frameStart&&(point.quality&0x01)&&!(point.quality&0x02)&&count>1) //2. framestart?
-			{
-				if(point.angle_high&0x01)
-				{
-          scanCount++;
-					return count;
-				}
-			}
-			else if(frameStart)
-			{
-        int distance = calcIntDistance(point.distance_low,point.distance_high);
-        if(distance > 0){
-          
-          int angle = calcIntAngle(point.angle_low,point.angle_high);
-          if(angle < 360) {
-            //if we are scanning quickly we may 
-            if(angle > lastAngle + 1){
-              for(int i = lastAngle;i<angle;i++) scanPoints[angle] = 0;
-            }
-            scanPoints[angle] = distance;
-            quality[angle]= point.quality;
-            lastAngle  = angle;
-          }
-        }
-			}
-		}
-	}
-	return count;
-}
-
-uint16_t rpLidar::awaitExpressScan()
-{
-	uint8_t Buffer[2];
-	uint16_t count=0; //count of Packets with angle and 40 cabins
-	uint8_t cabinCount=0; //count of cabin which haves to be written
-	serial->flush();
-	uint8_t crc=0;
-	while(count<79)
-	{
-		if(serial->available()>=2)
-		{
-			uint8_t sync1=serial->read(); //Sync byte 1 of Packet
-			if(((sync1&0xF0)==0xA0))
-			{
-				uint8_t sync2=serial->read(); //Sync byte 2 of Packet
-				if((sync2&0xF0)==0x50)
-				{
-					crc=(sync2<<4)|(sync1&0x0F);
-
-					while(serial->available()<2);
-					serial->readBytes((uint8_t*)&Buffer,2);//read angle
-					ExpressDataBuffer[count].angle=(Buffer[1]<<8)|Buffer[0]; //connect angle low and high byte
-					while(cabinCount<40)
-					{
-						if(serial->available()>=2)//cabin available?
-						{
-							serial->readBytes((uint8_t*)&Buffer,2);
-							ExpressDataBuffer[count].cabin[cabinCount]=Buffer[1]<<8|Buffer[0];
-							cabinCount++;
-						}
-					}
-					cabinCount=0;
-					if(!checkCRC(ExpressDataBuffer[count],crc))
-					{
-						return 0;
-					}
-					count++;
-				}
-			}
-		}
-	}
-	ExpressDataToPointArray((stExpressDataPacket_t*) ExpressDataBuffer, count-1);
-	return count;
-}
-
-
->>>>>>> c7574a5ce57db34815511a470b8a9e8f540a57fc
 void rpLidar::setAngleOfInterest(uint16_t _left,uint16_t _right)
 {
 	//setter
@@ -338,7 +219,7 @@ float rpLidar::calcDistance(uint8_t _lowByte,uint8_t _highByte)
 void rpLidar::DebugPrintMeasurePoints(int16_t count)
 {
 	//Serial.println(count-1);
-	if(count<=0)return;
+	if(count<=0 )return;
   for (int pos = 0; pos < (int)count; ++pos) {
       scanDot dot;
       if (!_cached_scan_node_hq_buf[pos].dist_mm_q2) continue;
@@ -482,7 +363,6 @@ double  rpLidar::calcAngle(stExpressDataPacket_t* _packets,uint16_t _k)
 	return result;
 
 }
-<<<<<<< HEAD
 sl_result rpLidar::cacheUltraCapsuledScanData()
 {
     sl_lidar_response_ultra_capsule_measurement_nodes_t    ultra_capsule_node;
@@ -725,5 +605,3 @@ void rpLidar::_ultraCapsuleToNormal(const sl_lidar_response_ultra_capsule_measur
     _cached_previous_ultracapsuledata = capsule;
     _is_previous_capsuledataRdy = true;
 }
-=======
->>>>>>> c7574a5ce57db34815511a470b8a9e8f540a57fc

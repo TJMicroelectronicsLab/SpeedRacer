@@ -23,7 +23,7 @@
 #define SL_RESULT_INSUFFICIENT_MEMORY    (sl_result)(0x8006 | SL_RESULT_FAIL_BIT)
 #define DEFAULT_TIMEOUT 2000
 
-#define  MAX_SCAN_NODES  (512)
+#define  MAX_SCAN_NODES  (1024)
 
 #define SL_LIDAR_STATUS_OK                 0x0
 #define SL_LIDAR_STATUS_WARNING            0x1
