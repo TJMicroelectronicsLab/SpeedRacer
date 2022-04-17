@@ -218,19 +218,18 @@ float rpLidar::calcDistance(uint8_t _lowByte,uint8_t _highByte)
 
 void rpLidar::DebugPrintMeasurePoints(int16_t count)
 {
-	//Serial.println(count-1);
-	if(count<=0 )return;
+
   for (int pos = 0; pos < (int)count; ++pos) {
       scanDot dot;
       if (!_cached_scan_node_hq_buf[pos].dist_mm_q2) continue;
-      dot.quality = _cached_scan_node_hq_buf[pos].quality;
+      //dot.quality = _cached_scan_node_hq_buf[pos].quality; //quality is broken for some reason
       dot.angle = (((float)_cached_scan_node_hq_buf[pos].angle_z_q14) * 90.0 / 16384.0);
       dot.dist = _cached_scan_node_hq_buf[pos].dist_mm_q2 /4.0f;
       Serial.print(dot.angle);
       Serial.print(":");
       Serial.println(dot.dist);
       //Serial.print(":");
-      ///Serial.print(dot.quality);
+      //Serial.print(dot.quality);
   }
 }
 
