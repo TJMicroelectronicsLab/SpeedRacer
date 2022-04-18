@@ -20,12 +20,8 @@ class rpLidar{
 	 * @param pointer to used USART
 	 * @param Baudrate
 	 */
-	rpLidar(HardwareSerial *_serial,uint32_t baud,int rx, int tx);
+	rpLidar(HardwareSerial *_serial,uint32_t baud, int rx, int tx);
 
-  /**
-   * set serial port
-   */
-  void setSerial(HardwareSerial * _sp){serial = _sp;}
 	/**
 	 * Gets the device info from rpLidar
 	 *
@@ -69,28 +65,17 @@ class rpLidar{
 	/**
 	 * should be excecuted as often as possible to read the data from USART
 	 * 
-	 * @return the number of data for the running mode (express *40, standard*1) 
+	 * @return status 
 	 */	
-	uint16_t readMeasurePoints();
+  sl_result cacheUltraCapsuledScanData();
 
 	/**
 	 * Sets the Angle for isDataBetweenBorders()
 	 *
 	 */	
 	void setAngleOfInterest(uint16_t _left,uint16_t right);
-  /**
-  * Calculates angle for Standard mode 
-  * According to the Datasheet for standard mode angle´s
-  * @param LS
-  * @param MS
-  * @returns angle 0-360
-  */	
-	uint16_t calcIntAngle(uint8_t _lowByte,uint8_t _highByte);
-  /**
-  * Calculates the distance for Standard mode
-  * @returns distance in mm
-  */	
-	 uint16_t calcIntDistance(uint8_t _lowByte, uint8_t _highByte);
+
+
 	//Debug Funktionen
 	void DebugPrintMeasurePoints(int16_t _count);	///< prints Standard Data in normal Format in Serial Monitor
 	void DebugPrintDeviceErrorStatus(stDeviceStatus_t _status); ///< prints Status of lidar in Serial Monitor
@@ -99,20 +84,25 @@ class rpLidar{
 	void DebugPrintBufferAsHex();				///< prints Standard Data as Hex splitted with ","  in Serial Monitor
 
 	
-	point_t Data[1]; ///< stores the raw scan data
-  int dataIndex; ///< allows buffer flipping for multi-thread
-	stScanDataPoint_t DataBuffer[1500];	///<Storage to save the Data of a Standard Scan
-	int scanPoints[360];//360 points containing latest scan distances as value
-  int quality[360];
-  int scanCount;
+	//point_t Data[1540]; ///< stores the raw scan data
+	//stScanDataPoint_t DataBuffer[1500];	///<Storage to save the Data of a Standard Scan
+	sl_lidar_response_measurement_node_hq_t   _cached_scan_node_hq_buf[MAX_SCAN_NODES];
+  sl_lidar_response_ultra_capsule_measurement_nodes_t _cached_previous_ultracapsuledata;
+  bool                                         _is_previous_capsuledataRdy;
+  size_t                                   _cached_scan_node_hq_count;
+  sl_u8                                    _cached_capsule_flag;
+  SemaphoreHandle_t scan_mutex;
 	private:
 	
-	stExpressDataPacket_t ExpressDataBuffer[79];	///<Storge to save the Data of an Express Scan
+	//stExpressDataPacket_t ExpressDataBuffer[79];	///<Storge to save the Data of an Express Scan
 	uint16_t interestAngleLeft;		///< left border of needed angle 180-360°
 	uint16_t interestAngleRight;	///< right border of needed angle 0-180°
 
 	uint8_t scanMode=stop; 			///< contains the actual scan mode of lidar
 	bool status=false; 				///< contains the actual status of lidar
+  bool _isScanning = true;
+  sl_result _waitUltraCapsuledNode(sl_lidar_response_ultra_capsule_measurement_nodes_t & node, sl_u32 timeout = DEFAULT_TIMEOUT);
+void _ultraCapsuleToNormal(const sl_lidar_response_ultra_capsule_measurement_nodes_t & capsule, sl_lidar_response_measurement_node_hq_t *nodebuffer, size_t &nodeCount);
 	
 	/**
 	 * Compares two Response Descriptors 
@@ -153,43 +143,6 @@ class rpLidar{
 	double  calcAngle(stExpressDataPacket_t* _packets,uint16_t _k);
 	
 	/**
-	 * Copy the data to new memory and calculate the true angle of each distance
-	 * 
-	 * @param Pointer to lidar recceive express databuffer
-	 * @param counts of packages
-	 * @return false if it failed
-	 */	
-	bool ExpressDataToPointArray(stExpressDataPacket_t* _packets, uint16_t _count);
-		
-	/**
-	 * Tries to read a new full cycle of Points
-	 * 
-	 * @return the number of points 
-	 */	
-	uint16_t awaitStandardScan();
-
-	/**
-	 * tries to read a new full cycle of Points
-	 * 
-	 * @return the number of cabins 
-	 */	
-	uint16_t awaitExpressScan();
-	
-	/**
-	 * Starts an express scan directly 
-	 *
-	 * @return the count of cabins with data (for each cabin 40 Data points)
-	 */	
-	uint16_t scanExpress();
-	
-	/**
-	 * Starts an standard scan directly
-	 *
-	 * @return the count of measurement points
-	 */	
-	uint16_t scanStandard();
-	
-	/**
 	 * Checks if the angle is between the wanted angle
 	 * that`s set with setAngleOfInterest();
 	 * 
@@ -214,7 +167,7 @@ class rpLidar{
 	 * @returns angle 0.00-360.00
 	 */	
 	float calcAngle(uint8_t _lowByte, uint8_t _highByte);
-
+	
 	/**
 	 * Calculates angle for Express mode 
 	 * According to the Datasheet for express mode angle´s

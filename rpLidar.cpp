@@ -8,14 +8,47 @@
 #include "rpLidar.h"
 #include "Arduino.h"
 
-rpLidar::rpLidar(HardwareSerial *_mySerial,uint32_t baud, int rx, int tx)
+static sl_u32 _varbitscale_decode(sl_u32 scaled, sl_u32 & scaleLevel)
 {
-  //serial  = &Serial2;
-  serial= new HardwareSerial(2);
-  serial->setRxBufferSize(3080);
-  serial->begin(baud,SERIAL_8N1,rx,tx);
-  scanCount = 0;
+    static const sl_u32 VBS_SCALED_BASE[] = {
+        SL_LIDAR_VARBITSCALE_X16_DEST_VAL,
+        SL_LIDAR_VARBITSCALE_X8_DEST_VAL,
+        SL_LIDAR_VARBITSCALE_X4_DEST_VAL,
+        SL_LIDAR_VARBITSCALE_X2_DEST_VAL,
+        0,
+    };
 
+    static const sl_u32 VBS_SCALED_LVL[] = {
+        4,
+        3,
+        2,
+        1,
+        0,
+    };
+
+    static const sl_u32 VBS_TARGET_BASE[] = {
+        (0x1 << SL_LIDAR_VARBITSCALE_X16_SRC_BIT),
+        (0x1 << SL_LIDAR_VARBITSCALE_X8_SRC_BIT),
+        (0x1 << SL_LIDAR_VARBITSCALE_X4_SRC_BIT),
+        (0x1 << SL_LIDAR_VARBITSCALE_X2_SRC_BIT),
+        0,
+    };
+
+    for (size_t i = 0; i < 5; ++i) {
+        int remain = ((int)scaled - (int)VBS_SCALED_BASE[i]);
+        if (remain >= 0) {
+            scaleLevel = VBS_SCALED_LVL[i];
+            return VBS_TARGET_BASE[i] + (remain << scaleLevel);
+        }
+    }
+    return 0;
+}
+rpLidar::rpLidar(HardwareSerial *_mySerial,uint32_t baud,int rx,int tx)
+{
+   scan_mutex = xSemaphoreCreateMutex();
+	serial=_mySerial;
+  serial->setRxBufferSize(256);
+	serial->begin(baud, SERIAL_8N1,rx,tx);
 }
 
 
@@ -48,18 +81,6 @@ stDeviceStatus_t rpLidar::getDeviceHealth()
 	return deviceStatus;
 }
 
-uint16_t rpLidar::scanExpress()
-{
-	start(express);
-	return readMeasurePoints();
-}
-
-uint16_t rpLidar::scanStandard()
-{
-	start(standard);
-	return readMeasurePoints();
-}
-
 void rpLidar::resetDevice()
 {
 	serial->write((uint8_t*)&req_message[rq_reset],2); //send reset request
@@ -77,165 +98,22 @@ bool rpLidar::start(uint8_t _mode)
 {
 	resetDevice();
 	clearSerialBuffer();
-	switch(_mode)
-	{
-		case standard:
-			serial->write((uint8_t*)&req_message[rq_scan],2); //standard scan request
-			break;
-		case express:
-			serial->write((uint8_t*)&req_Express[extendedVersion],9); //express scan request
-			break;
-		default:
-			return false;
-			break;
-	}
+  Serial.write("strt");
+  serial->write((uint8_t*)&req_Express[denseVersion],9); //express scan request
 
 	rp_descriptor_t descr;
 
 	if(!checkForTimeout(100,7)) //wait for response
 	{
 		serial->readBytes((uint8_t*)&descr,7);
-		switch(_mode)
-		{
-			case standard:
-				scanMode=_mode;
-				status=true;
-				return compareDescriptor(descr,resp_descriptor[startScan]);
-				break;
-
-			case express:
-				scanMode=_mode;
-				status=true;
-				return compareDescriptor(descr,resp_descriptor[legacyVersion]);
-				break;
-			default :
-				Serial.print("Kein Mode : ");
-				Serial.println(_mode);
-				scanMode=stop;
-				status=false;
-				return false;
-				break;
-		}
-
+    scanMode=_mode;
+    status=true;
+    Serial.print("1");
+    //ToDo - figure out correct response
+    return compareDescriptor(descr,resp_descriptor[ultradense]);
 	}
-	return false;
+  return false;
 }
-
-uint16_t rpLidar::readMeasurePoints()
-{
-	uint16_t count=0;
-	switch(scanMode)
-	{
-		case standard:
-			count=awaitStandardScan();
-			break;
-		case express:
-			count=awaitExpressScan();
-			break;
-	}
-	return count;
-}
-
-
-uint16_t rpLidar::awaitStandardScan()
-{
-	uint8_t *pBuff=(uint8_t*)&DataBuffer; //Pointer to Buffer
-	uint16_t count=0;
-	stScanDataPoint_t point;
-	bool frameStart=false;
-
-	uint32_t startTime=millis();
-  int lastAngle=0;
-	while(millis()<(startTime+1400)) //timeout after 5 seconds
-	{
-		if(serial->available()>=5)
-		{
-			serial->readBytes((uint8_t*)&point,5);
-
-			//search for frameStart
-				// new Frame? S=1 !S=0 an checkbit information can be found in protocol datasheet
-			if((point.quality&0x01)&&(!(point.quality&0x02))&&!frameStart) //  framestart? S=1 !S=0
-			{
-				if(point.angle_high&0x01) //check Bit
-				{
-					frameStart=true;
-				}
-			}
-			else if(frameStart&&(point.quality&0x01)&&!(point.quality&0x02)&&count>1) //2. framestart?
-			{
-				if(point.angle_high&0x01)
-				{
-          scanCount++;
-					return count;
-				}
-			}
-			else if(frameStart)
-			{
-        int distance = calcIntDistance(point.distance_low,point.distance_high);
-        if(distance > 0){
-          
-          int angle = calcIntAngle(point.angle_low,point.angle_high);
-          if(angle < 360) {
-            //if we are scanning quickly we may 
-            if(angle > lastAngle + 1){
-              for(int i = lastAngle;i<angle;i++) scanPoints[angle] = 0;
-            }
-            scanPoints[angle] = distance;
-            quality[angle]= point.quality;
-            lastAngle  = angle;
-          }
-        }
-			}
-		}
-	}
-	return count;
-}
-
-uint16_t rpLidar::awaitExpressScan()
-{
-	uint8_t Buffer[2];
-	uint16_t count=0; //count of Packets with angle and 40 cabins
-	uint8_t cabinCount=0; //count of cabin which haves to be written
-	serial->flush();
-	uint8_t crc=0;
-	while(count<79)
-	{
-		if(serial->available()>=2)
-		{
-			uint8_t sync1=serial->read(); //Sync byte 1 of Packet
-			if(((sync1&0xF0)==0xA0))
-			{
-				uint8_t sync2=serial->read(); //Sync byte 2 of Packet
-				if((sync2&0xF0)==0x50)
-				{
-					crc=(sync2<<4)|(sync1&0x0F);
-
-					while(serial->available()<2);
-					serial->readBytes((uint8_t*)&Buffer,2);//read angle
-					ExpressDataBuffer[count].angle=(Buffer[1]<<8)|Buffer[0]; //connect angle low and high byte
-					while(cabinCount<40)
-					{
-						if(serial->available()>=2)//cabin available?
-						{
-							serial->readBytes((uint8_t*)&Buffer,2);
-							ExpressDataBuffer[count].cabin[cabinCount]=Buffer[1]<<8|Buffer[0];
-							cabinCount++;
-						}
-					}
-					cabinCount=0;
-					if(!checkCRC(ExpressDataBuffer[count],crc))
-					{
-						return 0;
-					}
-					count++;
-				}
-			}
-		}
-	}
-	ExpressDataToPointArray((stExpressDataPacket_t*) ExpressDataBuffer, count-1);
-	return count;
-}
-
 
 void rpLidar::setAngleOfInterest(uint16_t _left,uint16_t _right)
 {
@@ -299,13 +177,7 @@ float rpLidar::calcAngle(uint8_t _lowByte,uint8_t _highByte)
 	winkel|=_lowByte>>1;
 	return winkel/64.0;
 }
-uint16_t rpLidar::calcIntAngle(uint8_t _lowByte,uint8_t _highByte)
-{
-	uint16_t winkel=_highByte<<7;
-	winkel|=_lowByte>>1;
-  //drop fraction
-	return winkel>>6;
-}
+
 float rpLidar::calcCapsuledAngle(uint16_t _Wi,uint16_t _Wi2,uint8_t _k)
 {
 	float angle1=_Wi/64.00;
@@ -335,12 +207,7 @@ float rpLidar::calcDistance(uint8_t _lowByte,uint8_t _highByte)
 	distance|=_lowByte;
 	return distance/4.0;
 }
-uint16_t rpLidar::calcIntDistance(uint8_t _lowByte,uint8_t _highByte)
-{
-	uint16_t distance=(_highByte)<<8;
-	distance|=_lowByte;
-	return distance>>2;
-}
+
 
 
 //-----------------------------------------------------------------------------------------------------//
@@ -349,25 +216,21 @@ uint16_t rpLidar::calcIntDistance(uint8_t _lowByte,uint8_t _highByte)
 //-----------------------------------------------------------------------------------------------------//
 //-----------------------------------------------------------------------------------------------------//
 
-void rpLidar::DebugPrintMeasurePoints(int16_t _count)
+void rpLidar::DebugPrintMeasurePoints(int16_t count)
 {
-	Serial.println(_count-1);
-	if(_count<=0)return;
 
-    for(uint16_t i=0;i<_count-1;i++)
-    {
-		if(isDataBetweenBorders(DataBuffer[i])&&isDataValid(DataBuffer[i]))
-		{
-			Serial.print(i);
-			Serial.print("\t|\t");
-			Serial.print((DataBuffer[i].quality)>>2,DEC);
-			Serial.print("\t|\t");
-			Serial.print(calcAngle(DataBuffer[i].angle_low,DataBuffer[i].angle_high));
-			Serial.print("\t|\t");
-			Serial.print(calcDistance(DataBuffer[i].distance_low,DataBuffer[i].distance_high));
-			Serial.println();
-		}
-	}
+  for (int pos = 0; pos < (int)count; ++pos) {
+      scanDot dot;
+      if (!_cached_scan_node_hq_buf[pos].dist_mm_q2) continue;
+      //dot.quality = _cached_scan_node_hq_buf[pos].quality; //quality is broken for some reason
+      dot.angle = (((float)_cached_scan_node_hq_buf[pos].angle_z_q14) * 90.0 / 16384.0);
+      dot.dist = _cached_scan_node_hq_buf[pos].dist_mm_q2 /4.0f;
+      Serial.print(dot.angle);
+      Serial.print(":");
+      Serial.println(dot.dist);
+      //Serial.print(":");
+      //Serial.print(dot.quality);
+  }
 }
 
 void rpLidar::DebugPrintDeviceErrorStatus(stDeviceStatus_t _status)
@@ -413,28 +276,7 @@ void rpLidar::DebugPrintDescriptor(rp_descriptor_t _descriptor)
 	Serial.println();
 }
 
-void rpLidar::DebugPrintBufferAsHex()
-{
-	for(uint16_t i=0;i<sizeof(DataBuffer)/sizeof(scanDataPoint);i++)
-	{
-		Serial.print("0x");
-		Serial.print(DataBuffer[i].quality,HEX);
-		Serial.print(",");
-		Serial.print("0x");
-		Serial.print(DataBuffer[i].angle_low,HEX);
-		Serial.print(",");
-		Serial.print("0x");
-		Serial.print(DataBuffer[i].angle_high,HEX);
-		Serial.print(",");
-		Serial.print("0x");
-		Serial.print(DataBuffer[i].distance_low,HEX);
-		Serial.print(",");
-		Serial.print("0x");
-		Serial.print(DataBuffer[i].distance_high,HEX);
-		Serial.println(",");
-	}
-	Serial.println();
-}
+
 
 
 //-----------------------------------------------------------------------------------------------------//
@@ -497,60 +339,7 @@ bool rpLidar::checkForTimeout(uint32_t _time,size_t _size)
 	return false;
 }
 
-bool rpLidar::ExpressDataToPointArray(stExpressDataPacket_t* _packets, uint16_t _count)
-{
-	uint16_t index=0;
-	/// do a copy of expressData packet buffer and replace the angle of each cabin with the real angle
 
-	for(uint16_t i=0;i<_count-2;i++) //each expressData packet
-	{
-		for(uint16_t j=0;j<40;j++) //each cabin in expressData packet
-		{
-			double angle=calcAngle(_packets,j); //calculate the angle of current cabin
-			if(isDataBetweenBorders(angle)) //data correct interesting and in fov?
-			{
-				Data[index].angle=angle;
-				Data[index].distance=_packets->cabin[j];
-				index++;
-			}
-			else
-			{
-				Data[index].angle=0;
-				Data[index].distance=0;
-				index++;
-			}
-		}
-		_packets++;
-	}
-
-/// sorting start
-///Aufsteigend sortieren, höchster winkel am Ende des Arrays
-	uint16_t tmpDistance; //temporary storage for value
-	double tmpAngle; //temporary storage for value
-	bool changed;
-    int counter = index-1;
-
-	do //sorts the data from low to high angle , highest angle is at the last index of the array
-	{
-		changed = false;
-		for (int i = 0; i < counter; i++)
-		{
-			if (Data[i].angle > Data[i + 1].angle)
-			{
-				tmpAngle = Data[i + 1].angle;
-				tmpDistance = Data[i + 1].distance;
-				Data[i + 1].angle = Data[i].angle;
-				Data[i + 1].distance = Data[i].distance;
-				Data[i].angle = tmpAngle;
-				Data[i].distance=tmpDistance;
-				changed = true;
-			}
-		}
-	}while(changed);
-
-///sorting END
-	return true;
-}
 
 double  rpLidar::calcAngle(stExpressDataPacket_t* _packets,uint16_t _k)
 {
@@ -572,4 +361,246 @@ double  rpLidar::calcAngle(stExpressDataPacket_t* _packets,uint16_t _k)
 	}
 	return result;
 
+}
+sl_result rpLidar::cacheUltraCapsuledScanData()
+{
+    sl_lidar_response_ultra_capsule_measurement_nodes_t    ultra_capsule_node;
+    sl_lidar_response_measurement_node_hq_t   local_buf[256];
+    size_t   count = 256;
+    sl_lidar_response_measurement_node_hq_t   local_scan[MAX_SCAN_NODES];
+    size_t     scan_count = 0;
+    sl_result ans = SL_RESULT_OK;
+    memset(local_scan, 0, sizeof(local_scan));
+
+    _waitUltraCapsuledNode(ultra_capsule_node);
+    while (_isScanning) {
+        ans = _waitUltraCapsuledNode(ultra_capsule_node);
+        if (ans !=0) {
+            if ((sl_result)ans != SL_RESULT_OPERATION_TIMEOUT && (sl_result)ans != SL_RESULT_INVALID_DATA) {
+                //_isScanning = false;
+                return (sl_result)ans ;
+            }
+            else {
+                // current data is invalid, do not use it.
+                continue;
+            }
+        }
+
+        _ultraCapsuleToNormal(ultra_capsule_node, local_buf, count);
+        for (size_t pos = 0; pos < count; ++pos) {
+            if (local_buf[pos].flag & SL_LIDAR_RESP_MEASUREMENT_SYNCBIT) {
+                // only publish the data when it contains a full 360 degree scan 
+
+                if ((local_scan[0].flag & SL_LIDAR_RESP_MEASUREMENT_SYNCBIT)) {   
+                  //xSemaphoreTake(scan_mutex, 500);  
+                    memcpy(_cached_scan_node_hq_buf, local_scan, scan_count * sizeof(sl_lidar_response_measurement_node_hq_t));
+                    _cached_scan_node_hq_count = scan_count;
+                  //xSemaphoreGive(scan_mutex);
+                }
+                scan_count = 0;
+            }
+            local_scan[scan_count++] = local_buf[pos];
+            if (scan_count == MAX_SCAN_NODES) scan_count -= 1; // prevent overflow
+
+            //for interval retrieve
+           // {
+           //     rp::hal::AutoLocker l(_lock);
+           //     _cached_scan_node_hq_buf_for_interval_retrieve[_cached_scan_node_hq_count_for_interval_retrieve++] = local_buf[pos];
+           //     if (_cached_scan_node_hq_count_for_interval_retrieve == _countof(_cached_scan_node_hq_buf_for_interval_retrieve)) _cached_scan_node_hq_count_for_interval_retrieve -= 1; // prevent overflow
+            //}
+        }
+    }
+
+    _isScanning = false;
+
+    return SL_RESULT_OK;
+}
+
+sl_result rpLidar::_waitUltraCapsuledNode(sl_lidar_response_ultra_capsule_measurement_nodes_t & node, sl_u32 timeout)
+{
+
+    int  recvPos = 0;
+    sl_u32 startTs = millis();
+    sl_u8  recvBuffer[sizeof(sl_lidar_response_ultra_capsule_measurement_nodes_t)];
+    sl_u8 *nodeBuffer = (sl_u8*)&node;
+    sl_u32 waitTime;
+    while ((waitTime = millis() - startTs) <= DEFAULT_TIMEOUT) {
+        size_t remainSize = sizeof(sl_lidar_response_ultra_capsule_measurement_nodes_t) - recvPos;
+        size_t recvSize;
+
+        recvSize = serial->available();
+        if(recvSize ==0) continue;
+        if (recvSize > remainSize) recvSize = remainSize;
+        recvSize = serial->read(recvBuffer, recvSize);
+        for (size_t pos = 0; pos < recvSize; ++pos) {
+            sl_u8 currentByte = recvBuffer[pos];
+            switch (recvPos) {
+            case 0: // expect the sync bit 1
+            {
+                sl_u8 tmp = (currentByte >> 4);
+                if (tmp == SL_LIDAR_RESP_MEASUREMENT_EXP_SYNC_1) {
+                    // pass
+                }
+                else {
+                    _is_previous_capsuledataRdy = false;
+                    continue;
+                }
+            }
+            break;
+            case 1: // expect the sync bit 2
+            {
+                sl_u8 tmp = (currentByte >> 4);
+                if (tmp == SL_LIDAR_RESP_MEASUREMENT_EXP_SYNC_2) {
+                    // pass
+                }
+                else {
+                    recvPos = 0;
+                    _is_previous_capsuledataRdy = false;
+                    continue;
+                }
+            }
+            break;
+            }
+            nodeBuffer[recvPos++] = currentByte;
+            if (recvPos == sizeof(sl_lidar_response_ultra_capsule_measurement_nodes_t)) {
+                // calc the checksum ...
+                sl_u8 checksum = 0;
+                sl_u8 recvChecksum = ((node.s_checksum_1 & 0xF) | (node.s_checksum_2 << 4));
+
+                for (size_t cpos = offsetof(sl_lidar_response_ultra_capsule_measurement_nodes_t, start_angle_sync_q6);
+                    cpos < sizeof(sl_lidar_response_ultra_capsule_measurement_nodes_t); ++cpos) 
+                {
+                    checksum ^= nodeBuffer[cpos];
+                }
+
+                if (recvChecksum == checksum) {
+                    // only consider vaild if the checksum matches...
+                    if (node.start_angle_sync_q6 & SL_LIDAR_RESP_MEASUREMENT_EXP_SYNCBIT) {
+                        // this is the first capsule frame in logic, discard the previous cached data...
+                        _is_previous_capsuledataRdy = false;
+
+                        return SL_RESULT_OK;
+                    }
+                    return SL_RESULT_OK;
+                }
+                _is_previous_capsuledataRdy = false;
+                return SL_RESULT_INVALID_DATA;
+            }
+        }
+    }
+    _is_previous_capsuledataRdy = false;
+    return SL_RESULT_OPERATION_TIMEOUT;
+}
+
+void rpLidar::_ultraCapsuleToNormal(const sl_lidar_response_ultra_capsule_measurement_nodes_t & capsule, sl_lidar_response_measurement_node_hq_t *nodebuffer, size_t &nodeCount)
+{
+    nodeCount = 0;
+    if (_is_previous_capsuledataRdy) {
+        int diffAngle_q8;
+        int currentStartAngle_q8 = ((capsule.start_angle_sync_q6 & 0x7FFF) << 2);
+        int prevStartAngle_q8 = ((_cached_previous_ultracapsuledata.start_angle_sync_q6 & 0x7FFF) << 2);
+
+        diffAngle_q8 = (currentStartAngle_q8)-(prevStartAngle_q8);
+        if (prevStartAngle_q8 > currentStartAngle_q8) {
+            diffAngle_q8 += (360 << 8);
+        }
+
+        int angleInc_q16 = (diffAngle_q8 << 3) / 3;
+        int currentAngle_raw_q16 = (prevStartAngle_q8 << 8);
+        for (size_t pos = 0; pos < 32/*_countof(_cached_previous_ultracapsuledata.ultra_cabins)*/; ++pos) {
+            int dist_q2[3];
+            int angle_q6[3];
+            int syncBit[3];
+
+
+            sl_u32 combined_x3 = _cached_previous_ultracapsuledata.ultra_cabins[pos].combined_x3;
+
+            // unpack ...
+            int dist_major = (combined_x3 & 0xFFF);
+
+            // signed partical integer, using the magic shift here
+            // DO NOT TOUCH
+
+            int dist_predict1 = (((int)(combined_x3 << 10)) >> 22);
+            int dist_predict2 = (((int)combined_x3) >> 22);
+
+            int dist_major2;
+
+            sl_u32 scalelvl1, scalelvl2;
+
+            // prefetch next ...
+            if (pos == 32/*_countof(_cached_previous_ultracapsuledata.ultra_cabins)*/ - 1) {
+                dist_major2 = (capsule.ultra_cabins[0].combined_x3 & 0xFFF);
+            }
+            else {
+                dist_major2 = (_cached_previous_ultracapsuledata.ultra_cabins[pos + 1].combined_x3 & 0xFFF);
+            }
+
+            // decode with the var bit scale ...
+            dist_major = _varbitscale_decode(dist_major, scalelvl1);
+            dist_major2 = _varbitscale_decode(dist_major2, scalelvl2);
+
+
+            int dist_base1 = dist_major;
+            int dist_base2 = dist_major2;
+
+            if ((!dist_major) && dist_major2) {
+                dist_base1 = dist_major2;
+                scalelvl1 = scalelvl2;
+            }
+
+
+            dist_q2[0] = (dist_major << 2);
+            if ((dist_predict1 == 0xFFFFFE00) || (dist_predict1 == 0x1FF)) {
+                dist_q2[1] = 0;
+            }
+            else {
+                dist_predict1 = (dist_predict1 << scalelvl1);
+                dist_q2[1] = (dist_predict1 + dist_base1) << 2;
+
+            }
+
+            if ((dist_predict2 == 0xFFFFFE00) || (dist_predict2 == 0x1FF)) {
+                dist_q2[2] = 0;
+            }
+            else {
+                dist_predict2 = (dist_predict2 << scalelvl2);
+                dist_q2[2] = (dist_predict2 + dist_base2) << 2;
+            }
+
+
+            for (int cpos = 0; cpos < 3; ++cpos) {
+                syncBit[cpos] = (((currentAngle_raw_q16 + angleInc_q16) % (360 << 16)) < angleInc_q16) ? 1 : 0;
+
+                int offsetAngleMean_q16 = (int)(7.5 * 3.1415926535 * (1 << 16) / 180.0);
+
+                if (dist_q2[cpos] >= (50 * 4))
+                {
+                    const int k1 = 98361;
+                    const int k2 = int(k1 / dist_q2[cpos]);
+
+                    offsetAngleMean_q16 = (int)(8 * 3.1415926535 * (1 << 16) / 180) - (k2 << 6) - (k2 * k2 * k2) / 98304;
+                }
+
+                angle_q6[cpos] = ((currentAngle_raw_q16 - int(offsetAngleMean_q16 * 180 / 3.14159265)) >> 10);
+                currentAngle_raw_q16 += angleInc_q16;
+
+                if (angle_q6[cpos] < 0) angle_q6[cpos] += (360 << 6);
+                if (angle_q6[cpos] >= (360 << 6)) angle_q6[cpos] -= (360 << 6);
+
+                sl_lidar_response_measurement_node_hq_t node;
+
+                node.flag = (syncBit[cpos] | ((!syncBit[cpos]) << 1));
+                node.quality = dist_q2[cpos] ? (0x2F << SL_LIDAR_RESP_MEASUREMENT_QUALITY_SHIFT) : 0;
+                node.angle_z_q14 = sl_u16((angle_q6[cpos] << 8) / 90);
+                node.dist_mm_q2 = dist_q2[cpos];
+
+                nodebuffer[nodeCount++] = node;
+            }
+
+        }
+    }
+
+    _cached_previous_ultracapsuledata = capsule;
+    _is_previous_capsuledataRdy = true;
 }
