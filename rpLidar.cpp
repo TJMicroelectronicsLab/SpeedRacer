@@ -115,51 +115,9 @@ bool rpLidar::start(uint8_t _mode)
   return false;
 }
 
-void rpLidar::setAngleOfInterest(uint16_t _left,uint16_t _right)
-{
-	//setter
-	interestAngleLeft=_left;
-	interestAngleRight=_right;
-}
 
 
-bool rpLidar::isDataBetweenBorders(stScanDataPoint_t _point)
-{
-	float angle=calcAngle(_point.angle_low,_point.angle_high);
-	if((angle>=interestAngleLeft)&&(angle<=interestAngleRight))
-	{
-		return true;
-	}
-	return false;
-}
 
-bool rpLidar::isDataBetweenBorders(float _angle)
-{
-	if((_angle>interestAngleLeft)&&(_angle<interestAngleRight))
-	{
-		return true;
-	}
-	return false;
-}
-
-
-bool rpLidar::isDataValid(stScanDataPoint_t _point)
-{
-	if(calcDistance(_point.distance_low,_point.distance_high)>0)
-	{
-		return true;
-	}
-	return false;
-}
-
-bool rpLidar::isDataValid(uint16_t _distance)
-{
-	if(_distance>0)
-	{
-		return true;
-	}
-	return false;
-}
 
 bool rpLidar::isRunning()
 {
@@ -169,43 +127,6 @@ bool rpLidar::isRunning()
 uint8_t rpLidar::isScanMode()
 {
 	return scanMode;
-}
-
-float rpLidar::calcAngle(uint8_t _lowByte,uint8_t _highByte)
-{
-	uint16_t winkel=_highByte<<7;
-	winkel|=_lowByte>>1;
-	return winkel/64.0;
-}
-
-float rpLidar::calcCapsuledAngle(uint16_t _Wi,uint16_t _Wi2,uint8_t _k)
-{
-	float angle1=_Wi/64.00;
-	float angle2=_Wi2/64.00;
-	float result;
-	if(angle1<=angle2)
-	{
-		result=angle1+((angle2-angle1)/40)*_k;
-	}
-	else
-	{
-		result=angle1+((360+angle2-angle1)/40)*_k;
-	}
-	if(result>360.0)
-	{
-		result=result-360.0;
-	}
-	return result;
-}
-
-
-
-
-float rpLidar::calcDistance(uint8_t _lowByte,uint8_t _highByte)
-{
-	uint16_t distance=(_highByte)<<8;
-	distance|=_lowByte;
-	return distance/4.0;
 }
 
 
@@ -308,23 +229,6 @@ void rpLidar::clearSerialBuffer()
 	}
 }
 
-bool rpLidar::checkCRC(stExpressDataPacket_t _package,uint8_t _crc)
-{
-	uint8_t crc=0;
-	crc=(uint8_t)_package.angle&0x00FF;
-	crc^=(uint8_t)(_package.angle>>8);
-	for(int i=0;i<40;i++)
-	{
-		crc^=(uint8_t)_package.cabin[i];
-		crc^=(uint8_t)(_package.cabin[i]>>8);
-
-	}
-	if(_crc==crc)
-	{
-		return true;
-	}
-	return false;
-}
 
 bool rpLidar::checkForTimeout(uint32_t _time,size_t _size)
 {
@@ -340,28 +244,6 @@ bool rpLidar::checkForTimeout(uint32_t _time,size_t _size)
 }
 
 
-
-double  rpLidar::calcAngle(stExpressDataPacket_t* _packets,uint16_t _k)
-{
-	double  angle1=(_packets->angle&0x7FFF)/64.00;
-	_packets++;
-	double  angle2=(_packets->angle&0x7FFF)/64.00;
-	double  result;
-	if(angle1<=angle2)
-	{
-		result=angle1+((angle2-angle1)/40)*_k;
-	}
-	else
-	{
-		result=angle1+((360+angle2-angle1)/40)*_k;
-	}
-	if(result>360.0)
-	{
-		result=result-360.0;
-	}
-	return result;
-
-}
 sl_result rpLidar::cacheUltraCapsuledScanData()
 {
     sl_lidar_response_ultra_capsule_measurement_nodes_t    ultra_capsule_node;
