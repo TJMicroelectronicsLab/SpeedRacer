@@ -31,6 +31,7 @@ void loop()
 // number of data points in cache: lidar._cached_scan_node_hq_count
 // float angle = (((float)_cached_scan_node_hq_buf[index].angle_z_q14) * 90.0 / 16384.0);
 // float distance = _cached_scan_node_hq_buf[index].dist_mm_q2 /4.0f;
+// each cache load contains a full 360 scan. If you slow down the rotations too much it will not fit and data will be lost (too many points per 360 deg for cache size allowable on ESP32)
  lidar.DebugPrintMeasurePoints(lidar._cached_scan_node_hq_count);
  delay(1);
 }

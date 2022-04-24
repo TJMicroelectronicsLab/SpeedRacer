@@ -69,11 +69,6 @@ class rpLidar{
 	 */	
   sl_result cacheUltraCapsuledScanData();
 
-	/**
-	 * Sets the Angle for isDataBetweenBorders()
-	 *
-	 */	
-	void setAngleOfInterest(uint16_t _left,uint16_t right);
 
 
 	//Debug Funktionen
@@ -86,7 +81,7 @@ class rpLidar{
 	
 	//point_t Data[1540]; ///< stores the raw scan data
 	//stScanDataPoint_t DataBuffer[1500];	///<Storage to save the Data of a Standard Scan
-	sl_lidar_response_measurement_node_hq_t   _cached_scan_node_hq_buf[MAX_SCAN_NODES];
+  sl_lidar_response_measurement_node_hq_t   _cached_scan_node_hq_buf[MAX_SCAN_NODES];
   sl_lidar_response_ultra_capsule_measurement_nodes_t _cached_previous_ultracapsuledata;
   bool                                         _is_previous_capsuledataRdy;
   size_t                                   _cached_scan_node_hq_count;
@@ -118,12 +113,6 @@ void _ultraCapsuleToNormal(const sl_lidar_response_ultra_capsule_measurement_nod
 	void clearSerialBuffer();
 
 	/**
-	 * Checks the CRC of an Express Scan Packet
-	 * with XOR accumulation of each data byte
-	 */		
-	bool checkCRC(stExpressDataPacket_t _package,uint8_t _crc);
-
-	/**
 	 * Checks if no Serial Data ist available in a given time
 	 * 
 	 * @param wait time ms 
@@ -132,73 +121,7 @@ void _ultraCapsuleToNormal(const sl_lidar_response_ultra_capsule_measurement_nod
 	 */	
 	bool checkForTimeout(uint32_t _time,size_t _size);
 	
-	
-	/**
-	 * Calculates the angle of each Cabin in an ExpressDataPacket
-	 *
-	 * @param pointer to the packet
-	 * @param current cabin
-	 * @return calculated angle
-	 */	
-	double  calcAngle(stExpressDataPacket_t* _packets,uint16_t _k);
-	
-	/**
-	 * Checks if the angle is between the wanted angle
-	 * that`s set with setAngleOfInterest();
-	 * 
-	 * @param  Standard mode Point to check
-	 * @return true if data is between borders
-	 */	
-	bool isDataBetweenBorders(stScanDataPoint_t _point);
-	
-	/**
-	 * Checks if the angle is between the wanted angle
-	 * that`s set with setAngleOfInterest();
-	 * @overload
-	 */	
-	bool isDataBetweenBorders(float _angle);
-	
 
-	/**
-	 * Calculates angle for Standard mode 
-	 * According to the Datasheet for standard mode angle´s
-	 * @param LS
-	 * @param MS
-	 * @returns angle 0.00-360.00
-	 */	
-	float calcAngle(uint8_t _lowByte, uint8_t _highByte);
-	
-	/**
-	 * Calculates angle for Express mode 
-	 * According to the Datasheet for express mode angle´s
-	 * 
-	 * @param Wi
-	 * @param Wi+1
-	 * @param k number of Cabin of Packet
-	 * @returns angle 0.00-360.00
-	 */	
-	 float calcCapsuledAngle(uint16_t _angle1,uint16_t _angle2,uint8_t _k);
-	
-	/**
-	 * Calculates the distance for Standard mode
-	 * @returns distance in mm
-	 */	
-	 float calcDistance(uint8_t _lowByte, uint8_t _highByte);
-
-	/**
-	 * Checks thats the measured distance is valid
-	 *
-	 * @return true if its valid
-	 */	
-	bool isDataValid(stScanDataPoint_t _point);
-	
-	/**
-	 * Checks thats the measured distance is valid
-	 *
-	 * @overload
-	 */	
-	bool isDataValid(uint16_t _distance);
-	
 	/**
 	 * 
 	 * @return true if the motor is running
