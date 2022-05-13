@@ -49,6 +49,8 @@ rpLidar::rpLidar(HardwareSerial *_mySerial,uint32_t baud,int rx,int tx)
 	serial=_mySerial;
   serial->setRxBufferSize(256);
 	serial->begin(baud, SERIAL_8N1,rx,tx);
+  _cached_scan_node_hq_count = 0;
+  total_scan_count = 0;
 }
 
 
@@ -274,7 +276,9 @@ sl_result rpLidar::cacheUltraCapsuledScanData()
                 // only publish the data when it contains a full 360 degree scan 
 
                 if ((local_scan[0].flag & SL_LIDAR_RESP_MEASUREMENT_SYNCBIT)) {   
-                  //xSemaphoreTake(scan_mutex, 500);  
+                  //xSemaphoreTake(scan_mutex, 500); 
+                  //increment so external process know we have completed a scan 
+                  total_scan_count++;
                     memcpy(_cached_scan_node_hq_buf, local_scan, scan_count * sizeof(sl_lidar_response_measurement_node_hq_t));
                     _cached_scan_node_hq_count = scan_count;
                   //xSemaphoreGive(scan_mutex);

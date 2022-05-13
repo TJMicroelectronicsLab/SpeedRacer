@@ -12,8 +12,9 @@ static void readPoints(void * parameter){
   }
 }
 void setup() {
- 
-  Serial.begin(921600);
+   pinMode(19,OUTPUT);
+  digitalWrite(19,HIGH);
+  Serial.begin(115200);
   esp_task_wdt_init(36000, false); //turn off watchdog so core 0 task doesn't cause reset
   lidar.stopDevice(); //reset the device to be sure that the status is good
   delay(1);
