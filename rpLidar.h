@@ -86,6 +86,7 @@ class rpLidar{
   bool                                         _is_previous_capsuledataRdy;
   size_t                                   _cached_scan_node_hq_count;
   sl_u8                                    _cached_capsule_flag;
+  uint8_t                                 total_scan_count;
   SemaphoreHandle_t scan_mutex;
 	private:
 	
