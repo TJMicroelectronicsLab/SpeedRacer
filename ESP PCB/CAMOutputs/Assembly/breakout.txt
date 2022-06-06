@@ -1,7 +1,0 @@
-Partlist exported from C:/Users/mgordon/Documents/EAGLE/projects/race board/breakout.sch at 3/31/2022 9:25 AM
-
-Qty Value            Device           Package   Parts          Description MF           MPN        OC_FARNELL OC_NEWARK POPULARITY
-2                    PINHD-1X12       1X12      JP1, JP2       PIN HEADER                                                         
-2                    PINHD-1X6        1X06      JP3, JP4       PIN HEADER                                                         
-4   53047-04         53047-04         53047-04  X1, X2, X3, X4 CONNECTOR   WALDOM/MOLEX 53047-0410 9733060    38C9900   0         
-1   ESP-32_30P_BKOUT ESP-32_30P_BKOUT ESP32-30P U$1                                                                               
